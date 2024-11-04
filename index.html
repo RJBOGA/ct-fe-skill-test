@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HealthCare Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="header">
+        <img src="TestLogo.svg" alt="Tech.Care Logo">
+        <div class="header-menu">
+            <a href="#">Overview</a>
+            <a href="#">Patients</a>
+            <a href="#">Schedule</a>
+            <a href="#">Message</a>
+            <a href="#">Transactions</a>
+        </div>
+    </div>
+    <div class="container">
+        <div class="sidebar">
+            <h2>Patients</h2>
+            <ul id="patients-list" class="patients-list"></ul>
+        </div>
+        
+        <div class="content">
+            <div class="diagnosis-history">
+                <h2>Diagnosis History</h2>
+                <div class="chart">
+                    <canvas id="bloodPressureChart"></canvas>
+                </div>                
+                <div class="vitals">
+                    <div id="respiratoryRate" class="vital-box">Respiratory Rate</div>
+                    <div id="temperature" class="vital-box">Temperature</div>
+                    <div id="heartRate" class="vital-box">Heart Rate</div>
+                </div>
+            </div>
+            <div class="diagnostic-list">
+                <h2>Diagnostic List</h2>
+                <table id="diagnostic-table">
+                    <tr>
+                        <th>Problem/Diagnosis</th>
+                        <th>Description</th>
+                        <th>Status</th>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="profile">
+            <div class="profile-info">
+                <img id="profilePicture" src="profile_picture" alt="Profile Picture">
+                <h3 id="profileName">Jessica Taylor</h3>
+                <p>General Information</p>
+                <div class="details">
+                    <div id="dob">Date of Birth: </div>
+                    <div id="gender">Gender: </div>
+                    <div id="phone">Contact Info: </div>
+                    <div id="emergencyContact">Emergency Contacts: </div>
+                    <div id="insuranceProvider">Insurance Provider: </div>
+                </div>
+                <button>Show All Information</button>
+            </div>
+            <div>
+                <br>
+            </div>
+            <div class="lab-results">
+                <h2>Lab Results</h2>
+                <ul id="lab-results-list"></ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchPatientData() {
+            try {
+                const response = await fetch('https://fedskillstest.coalitiontechnologies.workers.dev', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': 'Basic ' + btoa('coalition:skills-test'),
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const patient = data[0];
+
+                    document.getElementById('profilePicture').src = patient.profile_picture;
+                    document.getElementById('profileName').textContent = patient.name;
+                    document.getElementById('dob').textContent = `Date of Birth: ${patient.date_of_birth}`;
+                    document.getElementById('gender').textContent = `Gender: ${patient.gender}`;
+                    document.getElementById('phone').textContent = `Contact Info: ${patient.phone_number}`;
+                    document.getElementById('emergencyContact').textContent = `Emergency Contacts: ${patient.emergency_contact}`;
+                    document.getElementById('insuranceProvider').textContent = `Insurance Provider: ${patient.insurance_type}`;
+
+                    const latestDiagnosis = patient.diagnosis_history[0];
+                    document.getElementById('respiratoryRate').innerHTML = `Respiratory Rate<br><strong>${latestDiagnosis.respiratory_rate.value} bpm</strong><br>${latestDiagnosis.respiratory_rate.levels}`;
+                    document.getElementById('temperature').innerHTML = `Temperature<br><strong>${latestDiagnosis.temperature.value}°F</strong><br>${latestDiagnosis.temperature.levels}`;
+                    document.getElementById('heartRate').innerHTML = `Heart Rate<br><strong>${latestDiagnosis.heart_rate.value} bpm</strong><br>${latestDiagnosis.heart_rate.levels}`;
+
+                    const diagnosticTable = document.getElementById('diagnostic-table');
+                    patient.diagnostic_list.forEach(diagnosis => {
+                        const row = diagnosticTable.insertRow();
+                        row.insertCell(0).textContent = diagnosis.name;
+                        row.insertCell(1).textContent = diagnosis.description;
+                        row.insertCell(2).textContent = diagnosis.status;
+                    });
+
+                    const labResultsList = document.getElementById('lab-results-list');
+                    patient.lab_results.forEach(result => {
+                        const listItem = document.createElement('li');
+
+                        const resultText = document.createElement('span');
+                        resultText.textContent = result;
+
+                        const downloadIcon = document.createElement('img');
+                        downloadIcon.src = 'download.png';
+                        downloadIcon.alt = 'Download';
+                        downloadIcon.style.width = '16px';
+                        downloadIcon.style.height = '16px';
+                        downloadIcon.style.cursor = "pointer";
+                        downloadIcon.title = "Download";
+
+                        listItem.appendChild(resultText);
+                        listItem.appendChild(downloadIcon);
+                        
+                        labResultsList.appendChild(listItem);
+                    });
+
+                    const patientsList = document.getElementById('patients-list');
+                    data.forEach(patient => {
+                        const listItem = document.createElement('li');
+                        const profileImg = document.createElement('img');
+                        profileImg.src = patient.profile_picture;
+                        profileImg.alt = patient.name;
+                        listItem.appendChild(profileImg);
+                        listItem.appendChild(document.createTextNode(` ${patient.name}`));
+                        patientsList.appendChild(listItem);
+                    });
+
+                    createBloodPressureChart(patient.diagnosis_history);
+                } else {
+                    console.error('Failed to fetch patient data:', response.statusText);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        function createBloodPressureChart(diagnosisHistory) {
+            const ctx = document.getElementById('bloodPressureChart').getContext('2d');
+            
+            const labels = diagnosisHistory.map(history => `${history.month} ${history.year}`);
+            const systolicData = diagnosisHistory.map(history => history.blood_pressure.systolic.value);
+            const diastolicData = diagnosisHistory.map(history => history.blood_pressure.diastolic.value);
+
+            if (window.currentChart) {
+                window.currentChart.destroy();
+            }
+            
+            window.currentChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Systolic',
+                            data: systolicData,
+                            borderColor: '#FF69B4',
+                            backgroundColor: 'rgba(255, 105, 180, 0.2)',
+                            pointBackgroundColor: '#FF69B4',
+                            tension: 0.4,
+                            fill: true
+                        },
+                        {
+                            label: 'Diastolic',
+                            data: diastolicData,
+                            borderColor: '#4169E1',
+                            backgroundColor: 'rgba(65, 105, 225, 0.2)',
+                            pointBackgroundColor: '#4169E1',
+                            tension: 0.4,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            min: 60,
+                            max: 180,
+                            title: {
+                                display: true,
+                                text: 'Blood Pressure'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Months'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        fetchPatientData();
+    </script>
+</body>
+</html>
